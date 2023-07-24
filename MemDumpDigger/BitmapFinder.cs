@@ -8,14 +8,14 @@ namespace MemDumpDigger
 {
     public class BitmapFinder
     {
-        protected Random rand = new Random();
         protected BitStream.BitStream _stream;
-        public int PixelBits = 1; //1 - 32
-        public int Width = 320;
-        public int Height = 200;
+        public byte PixelBits = 1; //1 - 64
+        public uint Width = 320;
+        public uint Height = 200;
         public bool Interleaved = true;
         public bool UsePalette = true;
-        public Dictionary<uint, Color> PaletteColor = new Dictionary<uint, Color>();
+        public bool UseAlphaChannel = true;
+        public Dictionary<UInt16, Color> PaletteColor = new Dictionary<UInt16, Color>();
         public BitmapFinder(string aPath) : this(new FileStream(aPath, FileMode.Open, FileAccess.Read))
         {
             //_stream = new BitStream.BitStream();
@@ -32,38 +32,57 @@ namespace MemDumpDigger
         {
             return _stream.Length / PixelBits;
         }
-        public byte GetBit(long aBitPosition)
+        public byte GetBit(UInt64 aBitPosition)
         {
             byte byteAsBit;
-            _stream.Seek(aBitPosition, SeekOrigin.Begin);
+            _stream.Seek((long)aBitPosition, SeekOrigin.Begin);
             if (_stream.ReadBits(out byteAsBit, (BitNum)1))
                 return byteAsBit;
             else
                 return 0;
         }
-        public Color GetPixel(long aPixelPosition)
+        public UInt64 GetPixelValue(UInt64 aPixelPosition)
         {
-            long position = aPixelPosition * PixelBits;
-            uint pixelBits = 0;
-            long offsetMove = 1;
+            UInt64 position = aPixelPosition * PixelBits;
+            UInt64 pixelValue = 0;
+            UInt64 offsetMove = 1;
             if(Interleaved)
                 offsetMove = Width * Height;
             for (int b = 0; b < PixelBits; b++)
             {
-                pixelBits |= GetBit(position);
+                pixelValue |= GetBit(position);
                 if(b < PixelBits - 1)
-                    pixelBits <<= 1;
+                    pixelValue <<= 1;
                 position += offsetMove;
             }
-
+            return pixelValue;
+        }
+        public Color GetColorFromPixelValue(UInt64 aPixelValue)
+        {
             Color pixel = Color.FromArgb(0, 0, 0);
             if (UsePalette)
             {
-                if (!PaletteColor.ContainsKey(pixelBits))
-                    PaletteColor[pixelBits] = Color.FromArgb(rand.Next(0, 255), rand.Next(0, 255), rand.Next(0, 255));
-                pixel = PaletteColor[pixelBits];
+                if (!PaletteColor.ContainsKey((UInt16)aPixelValue))
+                    PaletteColor[(UInt16)aPixelValue] = PaletteColor[0];
+                pixel = PaletteColor[(UInt16)aPixelValue];
+            }
+            else
+            {
+                //Just using 8 bits as the different values
+                if (UseAlphaChannel)
+                {
+                    pixel = Color.FromArgb((int)((aPixelValue >> 24) & 255), (int)((aPixelValue >> 16) & 255), (int)((aPixelValue >> 8) & 255), (int)(aPixelValue & 255));
+                }
+                else
+                {
+                    pixel = Color.FromArgb((int)((aPixelValue >> 16) & 255), (int)((aPixelValue >> 8) & 255), (int)( aPixelValue & 255));
+                }
             }
             return pixel;
         }
-     }
+        public static byte ReverseBitsWith7Operations(byte b)
+        {
+            return (byte)(((b * 0x0802u & 0x22110u) | (b * 0x8020u & 0x88440u)) * 0x10101u >> 16);
+        }
+    }
 }
