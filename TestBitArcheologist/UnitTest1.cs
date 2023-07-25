@@ -23,6 +23,27 @@ namespace TestBitArcheologist
             Assert.AreEqual(0, bmpFinder.GetBit(7));
         }
         [TestMethod]
+        public void TestSetBit()
+        {
+            BitmapFinder bmpFinder = new BitmapFinder(new MemoryStream(new byte[] { 0b0000_0000 }));
+            bmpFinder.SetBit(0, 1);
+            Assert.AreEqual(1, bmpFinder.GetBit(0));
+            bmpFinder.SetBit(1, 0);
+            Assert.AreEqual(0, bmpFinder.GetBit(1));
+            bmpFinder.SetBit(2, 1);
+            Assert.AreEqual(1, bmpFinder.GetBit(2));
+            bmpFinder.SetBit(3, 0);
+            Assert.AreEqual(0, bmpFinder.GetBit(3));
+            bmpFinder.SetBit(4, 1);
+            Assert.AreEqual(1, bmpFinder.GetBit(4));
+            bmpFinder.SetBit(5, 0);
+            Assert.AreEqual(0, bmpFinder.GetBit(5));
+            bmpFinder.SetBit(6, 1);
+            Assert.AreEqual(1, bmpFinder.GetBit(6));
+            //bmpFinder.SetBit(7, 0);
+            //Assert.AreEqual(0, bmpFinder.GetBit(7));
+        }
+        [TestMethod]
         public void Test1x8x1()
         {
             uint width = 1;

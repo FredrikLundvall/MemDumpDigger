@@ -10,15 +10,14 @@ namespace MemDumpDigger
     {
         protected BitStream.BitStream _stream;
         public byte PixelBits = 1; //1 - 64
-        public uint Width = 320;
-        public uint Height = 200;
-        public bool Interleaved = true;
-        public bool UsePalette = true;
-        public bool UseAlphaChannel = true;
+        public uint Width = 8;
+        public uint Height = 8;
+        public bool Interleaved = false;
+        public bool UsePalette = false;
+        public bool UseAlphaChannel = false;
         public Dictionary<UInt16, Color> PaletteColor = new Dictionary<UInt16, Color>();
         public BitmapFinder(string aPath) : this(new FileStream(aPath, FileMode.Open, FileAccess.Read))
         {
-            //_stream = new BitStream.BitStream();
         }
         public BitmapFinder(Stream aStream)
         {
@@ -41,6 +40,13 @@ namespace MemDumpDigger
             else
                 return 0;
         }
+        public void SetBit(UInt64 aBitPosition, byte aByteAsBitValue)
+        {
+            //OBS! Felaktig enligt unittest
+            _stream.Seek((long)aBitPosition, SeekOrigin.Begin);
+            _stream.WriteBits(aByteAsBitValue, (BitNum)1);
+            _stream.Flush();
+        }
         public UInt64 GetPixelValue(UInt64 aPixelPosition)
         {
             UInt64 position = aPixelPosition * PixelBits;
@@ -56,6 +62,20 @@ namespace MemDumpDigger
                 position += offsetMove;
             }
             return pixelValue;
+        }
+        public void SetPixelValue(UInt64 aPixelPosition, UInt64 aPixelValue)
+        {
+            UInt64 position = aPixelPosition * PixelBits;
+            UInt64 offsetMove = 1;
+            if (Interleaved)
+                offsetMove = Width * Height;
+            for (int b = 0; b < PixelBits; b++)
+            {
+                SetBit(position, (byte) (aPixelValue & 1));
+                if (b < PixelBits - 1)
+                    aPixelValue >>= 1;
+                position += offsetMove;
+            }
         }
         public Color GetColorFromPixelValue(UInt64 aPixelValue)
         {
