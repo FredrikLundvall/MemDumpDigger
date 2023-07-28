@@ -1,14 +1,14 @@
-﻿using BitStream;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 
 namespace MemDumpDigger
 {
     public class BitmapFinder
     {
-        protected BitStream.BitStream _stream;
+        protected Stream _stream;
         public byte PixelBits = 1; //1 - 64
         public uint Width = 8;
         public uint Height = 8;
@@ -21,35 +21,41 @@ namespace MemDumpDigger
         }
         public BitmapFinder(Stream aStream)
         {
-            _stream = new BitStream.BitStream(aStream);
+            _stream = aStream;
         }
         public long GetNumberOfBits()
         {
-            return _stream.Length;
+            return _stream.Length / 8;
         }
         public long GetNumberOfPixels()
         {
-            return _stream.Length / PixelBits;
+            return GetNumberOfBits() / PixelBits;
         }
         public byte GetBit(UInt64 aBitPosition)
-        {
-            byte byteAsBit;
-            _stream.Seek((long)aBitPosition, SeekOrigin.Begin);
-            if (_stream.ReadBits(out byteAsBit, (BitNum)1))
-                return byteAsBit;
-            else
-                return 0;
+        {         
+            _stream.Position = (long)aBitPosition / 8;
+            byte bitNumber = (byte) (aBitPosition % 8);
+            var byte1 = _stream.ReadByte();
+            var byte2 = (byte1 >> (7 - bitNumber));
+            byte byteAsBit = (byte) ((byte2) & 1);
+            return byteAsBit;
         }
         public void SetBit(UInt64 aBitPosition, byte aByteAsBitValue)
         {
-            //OBS! Felaktig enligt unittest
-            _stream.Seek((long)aBitPosition, SeekOrigin.Begin);
-            _stream.WriteBits(aByteAsBitValue, (BitNum)1);
-            _stream.Flush();
+            _stream.Position = (long) aBitPosition / 8;
+            byte bitNumber = (byte) (aBitPosition % 8);
+            byte byteToUpdate = (byte) _stream.ReadByte();
+            byteToUpdate = (byte) (byteToUpdate | ( (aByteAsBitValue & 1) << (7 - bitNumber)));
+            _stream.Position = (long)aBitPosition / 8;
+            _stream.WriteByte((byte) byteToUpdate);
         }
         public UInt64 GetPixelValue(UInt64 aPixelPosition)
         {
-            UInt64 position = aPixelPosition * PixelBits;
+            UInt64 position = 0;
+            if (Interleaved)
+                position = aPixelPosition;
+            else
+                position = aPixelPosition * PixelBits;
             UInt64 pixelValue = 0;
             UInt64 offsetMove = 1;
             if(Interleaved)
@@ -82,9 +88,10 @@ namespace MemDumpDigger
             Color pixel = Color.FromArgb(0, 0, 0);
             if (UsePalette)
             {
-                if (!PaletteColor.ContainsKey((UInt16)aPixelValue))
-                    PaletteColor[(UInt16)aPixelValue] = PaletteColor[0];
-                pixel = PaletteColor[(UInt16)aPixelValue];
+                if (PaletteColor.ContainsKey((UInt16)aPixelValue))
+                    pixel = PaletteColor[(UInt16)aPixelValue];
+                else if(PaletteColor.Count > 0)
+                    PaletteColor[(UInt16)aPixelValue] = PaletteColor.Values.ElementAt(0);
             }
             else
             {
