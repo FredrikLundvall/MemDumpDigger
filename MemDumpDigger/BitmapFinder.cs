@@ -23,6 +23,10 @@ namespace MemDumpDigger
         {
             _stream = aStream;
         }
+        ~BitmapFinder()
+        {
+            Close();
+        }
         public long GetNumberOfBits()
         {
             return _stream.Length / 8;
@@ -107,6 +111,47 @@ namespace MemDumpDigger
             }
             return pixel;
         }
+        public UInt64 GetPixelValueFromColor(Color aColor)
+        {
+            UInt64 value = 0;
+            if (UsePalette)
+            {
+                value = PaletteColor.FirstOrDefault(x => x.Value == aColor).Key;
+            }
+            else
+            {
+                //Just using 8 bits as the different values
+                if (UseAlphaChannel)
+                {
+                    value = (UInt64)aColor.A << 24 | (UInt64)aColor.R << 16 | (UInt64)aColor.G << 8 | (UInt64)aColor.B;
+                }
+                else
+                {
+                    value = (UInt64)aColor.R << 16 | (UInt64)aColor.G << 8 | (UInt64)aColor.B;
+                }
+            }
+            return value;
+        }
+
+        public void WriteFileFromArrayOfColors(Color[] aColorArray, UInt64 aStartPosition)
+        {
+            //Texture2D image = Content.Load<Texture2D>(path);
+            //Color[] colors = new Color[image.Width * image.Height];
+            //image.GetData(colors);
+            UInt64 position = aStartPosition;
+            foreach(Color color in aColorArray)
+            {
+                SetPixelValue(position, GetPixelValueFromColor(color));
+                position++;
+            }
+            _stream.Flush();
+        }
+        public void Close()
+        {
+            _stream.Close();
+            _stream.Dispose();
+        }
+            
         public static byte ReverseBitsWith7Operations(byte b)
         {
             return (byte)(((b * 0x0802u & 0x22110u) | (b * 0x8020u & 0x88440u)) * 0x10101u >> 16);
