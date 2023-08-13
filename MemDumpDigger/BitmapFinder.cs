@@ -1,6 +1,6 @@
-﻿using System;
+﻿using Microsoft.Xna.Framework;
+using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 
@@ -15,6 +15,7 @@ namespace MemDumpDigger
         public bool Interleaved = false;
         public bool UsePalette = false;
         public bool UseAlphaChannel = false;
+        public bool OverWrite = true;
         public Dictionary<UInt16, Color> PaletteColor = new Dictionary<UInt16, Color>();
         public BitmapFinder(string aPath) : this(new FileStream(aPath, FileMode.Open, FileAccess.Read))
         {
@@ -39,19 +40,21 @@ namespace MemDumpDigger
         {         
             _stream.Position = (long)aBitPosition / 8;
             byte bitNumber = (byte) (aBitPosition % 8);
-            var byte1 = _stream.ReadByte();
-            var byte2 = (byte1 >> (7 - bitNumber));
+            var existingByte = _stream.ReadByte();
+            var byte2 = (existingByte >> (7 - bitNumber));
             byte byteAsBit = (byte) ((byte2) & 1);
             return byteAsBit;
         }
         public void SetBit(UInt64 aBitPosition, byte aByteAsBitValue)
         {
             _stream.Position = (long) aBitPosition / 8;
-            byte bitNumber = (byte) (aBitPosition % 8);
-            byte byteToUpdate = (byte) _stream.ReadByte();
-            byteToUpdate = (byte) (byteToUpdate | ( (aByteAsBitValue & 1) << (7 - bitNumber)));
+            byte bitNumber = (byte) (aBitPosition % 8);          
+            byte existingByte = 0;
+            if(!OverWrite || bitNumber != 0)
+                existingByte = (byte) _stream.ReadByte();
+            existingByte = (byte) ((existingByte & ~(1 << (7 - bitNumber))) | ( (aByteAsBitValue & 1) << (7 - bitNumber)));
             _stream.Position = (long)aBitPosition / 8;
-            _stream.WriteByte((byte) byteToUpdate);
+            _stream.WriteByte((byte) existingByte);
         }
         public UInt64 GetPixelValue(UInt64 aPixelPosition)
         {
@@ -75,21 +78,21 @@ namespace MemDumpDigger
         }
         public void SetPixelValue(UInt64 aPixelPosition, UInt64 aPixelValue)
         {
-            UInt64 position = aPixelPosition * PixelBits;
+            UInt64 bitPosition = aPixelPosition * PixelBits;
             UInt64 offsetMove = 1;
             if (Interleaved)
                 offsetMove = Width * Height;
             for (int b = 0; b < PixelBits; b++)
             {
-                SetBit(position, (byte) (aPixelValue & 1));
+                SetBit(bitPosition, (byte) (aPixelValue & 1));
                 if (b < PixelBits - 1)
                     aPixelValue >>= 1;
-                position += offsetMove;
+                bitPosition += offsetMove;
             }
         }
         public Color GetColorFromPixelValue(UInt64 aPixelValue)
         {
-            Color pixel = Color.FromArgb(0, 0, 0);
+            Color pixel = new Color(0, 0, 0);
             if (UsePalette)
             {
                 if (PaletteColor.ContainsKey((UInt16)aPixelValue))
@@ -102,11 +105,11 @@ namespace MemDumpDigger
                 //Just using 8 bits as the different values
                 if (UseAlphaChannel)
                 {
-                    pixel = Color.FromArgb((int)((aPixelValue >> 24) & 255), (int)((aPixelValue >> 16) & 255), (int)((aPixelValue >> 8) & 255), (int)(aPixelValue & 255));
+                    pixel = new Color((int)((aPixelValue >> 16) & 255), (int)((aPixelValue >> 8) & 255), (int)(aPixelValue & 255), (int)((aPixelValue >> 24) & 255));
                 }
                 else
                 {
-                    pixel = Color.FromArgb((int)((aPixelValue >> 16) & 255), (int)((aPixelValue >> 8) & 255), (int)( aPixelValue & 255));
+                    pixel = new Color((int)((aPixelValue >> 16) & 255), (int)((aPixelValue >> 8) & 255), (int)( aPixelValue & 255));
                 }
             }
             return pixel;
@@ -133,16 +136,13 @@ namespace MemDumpDigger
             return value;
         }
 
-        public void WriteFileFromArrayOfColors(Color[] aColorArray, UInt64 aStartPosition)
+        public void WriteFileFromArrayOfColors(Color[] aColorArray, UInt64 aStartPixelPosition)
         {
-            //Texture2D image = Content.Load<Texture2D>(path);
-            //Color[] colors = new Color[image.Width * image.Height];
-            //image.GetData(colors);
-            UInt64 position = aStartPosition;
+            UInt64 pixelPosition = aStartPixelPosition;
             foreach(Color color in aColorArray)
             {
-                SetPixelValue(position, GetPixelValueFromColor(color));
-                position++;
+                SetPixelValue(pixelPosition, GetPixelValueFromColor(color));
+                pixelPosition++;
             }
             _stream.Flush();
         }
